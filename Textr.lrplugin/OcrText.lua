@@ -11,7 +11,7 @@ local JSON = require 'JSON'
 local LOGGER = import 'LrLogger'( "Textr" )
 
 -- write to MacOS Console:system.log
--- LOGGER:enable( 'print' )
+-- LOGGER:enable( 'logfile' )
 -- LOGGER:info( "Loading Textr..." )
 
 local ENDPOINT_URL = _G.ENDPOINT_URL
@@ -50,7 +50,8 @@ end
 
 local function makeImageDataArray( dataArray )
    local img = "{image:{content: \"%s\"},"
-   img = img .. "features: [{type:'TEXT_DETECTION'}]}"
+   -- img = img .. "features: [{type:'TEXT_DETECTION'}]}"
+   img = img .. "features: [{type:'LABEL_DETECTION'}]}"
    local imageData = string.format( img, dataArray[1] )
    for i = 2, #dataArray do
       imageData = imageData .. "," .. string.format( img, dataArray[i] )
@@ -197,9 +198,35 @@ local function showDialogAndOCR()
 
             progress:setCaption( _G.DECODE )
             local foundTags = {}
-            -- LOGGER:debug("response: " .. string.gsub(response, "\n", ""))
+            LOGGER:debug("response: " .. string.gsub(response, "\n", ""))
             local ocr = JSON:decode( response )
+            
             for i = 1, #ocr.responses do
+
+              local annotations = ocr.responses[i].labelAnnotations
+              if annotations ~= nil then
+                 local tagsSet = {}
+                 for j, text in ipairs( annotations ) do
+                  -- better check for .score here and give a limit for the score
+                    if string.match( text.description, ALLOW_REGEX ) then
+                       if TEXT_LENGTH <= 0 or #text.description == TEXT_LENGTH then
+                          tagsSet[trim(text.description)] = true
+                       end
+                    end
+                 end
+                 local tagsText = ""
+                 for key in pairs(tagsSet) do
+                    local s,n = string.gsub(key, " ","_")
+                    tagsText = tagsText .. " " .. s
+                 end
+                 foundTags[#foundTags + 1] = trim( tagsText )
+                 LOGGER:debugf( "Photo: %s OCR Tag: %s", i, foundTags[i] )
+              end
+           
+             end
+            --[[]
+            for i = 1, #ocr.responses do
+
                local annotations = ocr.responses[i].textAnnotations
                if annotations ~= nil then
                   local tagsSet = {}
@@ -217,8 +244,9 @@ local function showDialogAndOCR()
                   foundTags[#foundTags + 1] = trim( tagsText )
                   LOGGER:debugf( "Photo: %s OCR Tag: %s", i, foundTags[i] )
                end
-            end
-
+            
+              end
+              --]]
             local addOcrTags = function ()
                -- LOGGER:debug( "Adding OCR Tags" )
                progress:setCaption( _G.ADDING )
